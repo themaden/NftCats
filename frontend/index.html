@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uyuyan Kediler NFT</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.0.umd.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        button { cursor: pointer; padding: 10px; margin: 5px; }
+        #nftContainer { display: flex; flex-wrap: wrap; justify-content: space-around; }
+        .nft-card { border: 1px solid #ddd; padding: 10px; margin: 10px; width: 200px; }
+        #cart { position: fixed; top: 10px; right: 10px; background: #f0f0f0; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Uyuyan Kediler NFT Koleksiyonu</h1>
+    <button id="connectWallet">Cüzdana Bağlan</button>
+    <div id="userInfo"></div>
+    <div id="nftContainer"></div>
+    <div id="cart">
+        <h2>Sepet <span id="cartCount"></span></h2>
+        <div id="cartItems"></div>
+        <p>Toplam: <span id="cartTotal"></span></p>
+        <button id="emptyCart">Sepeti Boşalt</button>
+    </div>
+
+    <script>
+        const CONTRACT_ADDRESS = "YOUR_CONTRACT_ADDRESS_HERE";
+        const CONTRACT_ABI = []; // Sözleşme ABI'sini buraya ekleyin
+
+        let contract;
+        let signer;
+        let cart = [];
+
+        async function connectWallet() {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    const provider = new ethers.providers.Web3Provider(window.ethereum);
+                    signer = provider.getSigner();
+                    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+                    const address = await signer.getAddress();
+                    document.getElementById('userInfo').innerText = `Bağlı Adres: ${address}`;
+                    displayNFTs();
+                    updateCart();
+                } catch (error) {
+                    console.error("Cüzdan bağlantısı başarısız:", error);
+                }
+            } else {
+                alert("Lütfen MetaMask yükleyin!");
+            }
+        }
+
+        async function displayNFTs() {
+            const container = document.getElementById('nftContainer');
+            container.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const tokenURI = await contract.tokenURI(i);
+                const owner = await contract.ownerOf(i);
+                const price = await contract.getPrice(i);
+                const name = await contract.getName(i);
+                const image = await contract.getImage(i);
+
+                const nftElement = document.createElement('div');
+                nftElement.className = 'nft-card';
+                nftElement.innerHTML = `
+                    <img src="${image}" alt="${name}" style="width:100%">
+                    <h3>${name}</h3>
+                    <p>Sahibi: ${owner}</p>
+                    <p>Fiyat: ${ethers.utils.formatEther(price)} ETH</p>
+                    <button onclick="buyNFT(${i})">Satın Al</button>
+                    <button onclick="addToCart(${i})">Sepete Ekle</button>
+                `;
+                container.appendChild(nftElement);
+            }
+        }
+
+        async function buyNFT(tokenId) {
+            try {
+                const price = await contract.getPrice(tokenId);
+                await contract.buyToken(tokenId, { value: price });
+                alert("NFT başarıyla satın alındı!");
+                displayNFTs();
+            } catch (error) {
+                console.error("NFT satın alma başarısız:", error);
+            }
+        }
+
+        function addToCart(tokenId) {
+            cart.push(tokenId);
+            updateCart();
+            alert("Sepete eklendi");
+        }
+
+        function updateCart() {
+            const cartItems = document.getElementById('cartItems');
+            const cartCount = document.getElementById('cartCount');
+            const cartTotal = document.getElementById('cartTotal');
+
+            cartItems.innerHTML = '';
+            let total = ethers.BigNumber.from(0);
+
+            cart.forEach(async (tokenId) => {
+                const price = await contract.getPrice(tokenId);
+                const name = await contract.getName(tokenId);
+                total = total.add(price);
+
+                const item = document.createElement('div');
+                item.innerHTML = `
+                    <p>${name} - ${ethers.utils.formatEther(price)} ETH 
+                    <button onclick="removeFromCart(${tokenId})">Kaldır</button></p>
+                `;
+                cartItems.appendChild(item);
+            });
+
+            cartCount.innerText = `(${cart.length})`;
+            cartTotal.innerText = `${ethers.utils.formatEther(total)} ETH`;
+        }
+
+        function removeFromCart(tokenId) {
+            cart = cart.filter(id => id !== tokenId);
+            updateCart();
+            alert("Sepetinizden çıkarıldı");
+        }
+
+        function emptyCart() {
+            if (confirm("Sepeti boşaltmak istediğinizden emin misiniz?")) {
+                cart = [];
+                updateCart();
+                window.location.href = '/'; // Ana sayfaya yönlendir
+            }
+        }
+
+        document.getElementById('connectWallet').addEventListener('click', connectWallet);
+        document.getElementById('emptyCart').addEventListener('click', emptyCart);
+    </script>
+</body>
+</html>
